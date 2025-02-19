@@ -1,0 +1,27 @@
+name: Generar users.csv
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # Permite ejecución manual
+
+jobs:
+  generate_csv:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🛎️ Clonar el repositorio
+        uses: actions/checkout@v3
+
+      - name: 🔧 Configurar Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: "3.9"
+
+      - name: 📦 Instalar dependencias
+        run: pip install pandas requests
+
+      - name: 🔄 Ejecutar el script para generar el CSV
+        env:
+          TOKEN_DAILY: ${{ secrets.TOKEN_DAILY }}
+        run: python generate_csv.py
