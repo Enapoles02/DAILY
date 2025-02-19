@@ -1,9 +1,32 @@
-import os
+import firebase_admin
+from firebase_admin import credentials, firestore
+import streamlit as st
+import json
 
-# 🔍 DEPURACIÓN: Ver si `FIREBASE_CREDENTIALS` está disponible en Streamlit
-firebase_json = os.getenv("FIREBASE_CREDENTIALS")
+# 🔥 Leer credenciales desde `st.secrets`
+firebase_dict = json.loads(json.dumps(st.secrets["FIREBASE_CREDENTIALS"]))
+firebase_dict["private_key"] = firebase_dict["private_key"].replace("\\n", "\n")
 
-if not firebase_json:
-    raise ValueError("❌ ERROR: `FIREBASE_CREDENTIALS` NO está disponible en el entorno de Streamlit.")
+# Inicializar Firebase con las credenciales
+if not firebase_admin._apps:
+    cred = credentials.Certificate(firebase_dict)
+    firebase_admin.initialize_app(cred)
 
-print("✅ FIREBASE_CREDENTIALS está disponible en el entorno.")
+# Conectar a Firestore
+db = firestore.client()
+
+# Función para registrar un usuario en Firestore
+def registrar_usuario(usuario, password):
+    doc_ref = db.collection("usuarios").document(usuario.lower())
+    if doc_ref.get().exists:
+        return False  # El usuario ya existe
+    doc_ref.set({"password": password})
+    return True
+
+# Función para verificar un usuario
+def verificar_usuario(usuario, password):
+    doc_ref = db.collection("usuarios").document(usuario.lower())
+    doc = doc_ref.get()
+    if doc.exists and doc.to_dict().get("password") == password:
+        return True
+    return False
