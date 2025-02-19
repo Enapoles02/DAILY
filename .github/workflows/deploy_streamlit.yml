@@ -3,7 +3,7 @@ name: Deploy Streamlit App
 on:
   push:
     branches:
-      - main  # Asegúrate de que este sea el nombre de tu rama principal
+      - main
   pull_request:
     branches:
       - main
@@ -27,4 +27,4 @@ jobs:
 
       - name: Run Streamlit App
         run: |
-          streamlit run app.py
+          nohup streamlit run app.py --server.enableCORS false --server.enableXsrfProtection false --server.port 8501 --server.address 0.0.0.0 &
