@@ -1,3 +1,4 @@
+import streamlit as st
 import pandas as pd
 import requests
 import os
@@ -5,37 +6,101 @@ import base64
 
 # Configuración de GitHub
 GITHUB_REPO = "Enapoles02/DAILY"
-GITHUB_TOKEN = os.getenv("TOKEN_DAILY")  # Usamos el secreto de GitHub
 CSV_FILE = "users.csv"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{CSV_FILE}"
+GITHUB_TOKEN = os.getenv("TOKEN_DAILY")
 
-# Crear un DataFrame con usuarios de prueba
-df = pd.DataFrame([
-    {"Usuario": "admin", "Contraseña": "admin123"},
-    {"Usuario": "test", "Contraseña": "test123"}
-])
+# Función para obtener el archivo CSV actualizado desde GitHub
+def obtener_usuarios():
+    response = requests.get(GITHUB_API_URL, headers={"Authorization": f"token {GITHUB_TOKEN}"})
+    if response.status_code == 200:
+        content = response.json()
+        csv_data = base64.b64decode(content["content"]).decode("utf-8")
+        return pd.read_csv(pd.io.common.StringIO(csv_data))
+    return pd.DataFrame(columns=["Usuario", "Contraseña"])  # Si no hay archivo, devuelve un CSV vacío
 
-# Convertir DataFrame a CSV
-csv_data = df.to_csv(index=False)
+# Función para guardar un usuario en GitHub
+def guardar_usuario(usuario, password):
+    df = obtener_usuarios()  # 🚀 Siempre obtener la versión más reciente
 
-# Obtener el SHA del archivo (si ya existe)
-response = requests.get(GITHUB_API_URL, headers={"Authorization": f"token {GITHUB_TOKEN}"})
-sha = response.json().get("sha", "")
+    # 🚀 Convertimos todo a minúsculas para evitar duplicados por diferencias en mayúsculas/minúsculas
+    usuario = usuario.strip().lower()
+    df["Usuario"] = df["Usuario"].astype(str).str.strip().str.lower()
 
-# Crear payload para subir archivo
-payload = {
-    "message": "Generar users.csv automáticamente",
-    "content": base64.b64encode(csv_data.encode()).decode(),
-    "branch": "main",
-}
-if sha:
-    payload["sha"] = sha  # Necesario si el archivo ya existe
+    if usuario in df["Usuario"].values:
+        return False  # Ya existe el usuario
 
-# Subir archivo a GitHub
-headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-response = requests.put(GITHUB_API_URL, json=payload, headers=headers)
+    nuevo_usuario = pd.DataFrame([[usuario, password]], columns=["Usuario", "Contraseña"])
+    df = pd.concat([df, nuevo_usuario], ignore_index=True)
 
-if response.status_code == 201 or response.status_code == 200:
-    print("✅ Archivo CSV creado correctamente en GitHub")
-else:
-    print(f"❌ Error al subir archivo: {response.json()}")
+    csv_data = df.to_csv(index=False).encode()
+    content_encoded = base64.b64encode(csv_data).decode("utf-8")
+
+    # Obtener el SHA del archivo (necesario para actualizarlo)
+    response = requests.get(GITHUB_API_URL, headers={"Authorization": f"token {GITHUB_TOKEN}"})
+    sha = response.json().get("sha", "")
+
+    # Subir archivo a GitHub
+    payload = {
+        "message": "Actualización de usuarios desde Streamlit",
+        "content": content_encoded,
+        "branch": "main",
+        "sha": sha
+    }
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    response = requests.put(GITHUB_API_URL, json=payload, headers=headers)
+
+    return response.status_code in [200, 201]
+
+# ---- INTERFAZ DE STREAMLIT ----
+st.title("Daily Huddle App")
+
+# Menú de opciones
+menu = st.sidebar.radio("Navegación", ["Registro", "Iniciar Sesión"])
+
+# 🚀 **PANTALLA 1: REGISTRO**
+if menu == "Registro":
+    st.subheader("Registro de Usuario")
+
+    usuario_nuevo = st.text_input("Usuario").strip()
+    password_nuevo = st.text_input("Contraseña", type="password")
+    boton_registro = st.button("Registrar")
+
+    if boton_registro:
+        if usuario_nuevo and password_nuevo:
+            if guardar_usuario(usuario_nuevo, password_nuevo):
+                st.success("Usuario registrado con éxito. Ahora puedes iniciar sesión.")
+            else:
+                st.error(f"El usuario '{usuario_nuevo}' ya existe en el sistema.")
+        else:
+            st.error("Debes ingresar un usuario y contraseña.")
+
+# 🚀 **PANTALLA 2: INICIAR SESIÓN**
+if menu == "Iniciar Sesión":
+    st.subheader("Inicio de Sesión")
+
+    usuario = st.text_input("Usuario").strip().lower()
+    password = st.text_input("Contraseña", type="password")
+    boton_login = st.button("Iniciar Sesión")
+
+    if boton_login:
+        usuarios_df = obtener_usuarios()
+
+        # 🚀 Convertimos todo a minúsculas para que no haya problemas de coincidencia
+        usuarios_df["Usuario"] = usuarios_df["Usuario"].astype(str).str.strip().str.lower()
+
+        if ((usuarios_df["Usuario"] == usuario) & (usuarios_df["Contraseña"] == password)).any():
+            st.session_state["logged_in"] = True
+            st.session_state["usuario"] = usuario
+            st.success(f"Bienvenido, {usuario}. Redirigiéndote a tu portal personal...")
+        else:
+            st.error("Usuario o contraseña incorrectos.")
+
+# 🚀 **PANTALLA 3: PORTAL PERSONAL**
+if "logged_in" in st.session_state and st.session_state["logged_in"]:
+    st.subheader(f"Bienvenido a tu portal personal, {st.session_state['usuario']}")
+    st.write("Aquí puedes ver tu información y opciones personalizadas.")
+
+    if st.button("Cerrar Sesión"):
+        st.session_state["logged_in"] = False
+        st.experimental_rerun()
