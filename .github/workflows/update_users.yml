@@ -1,0 +1,27 @@
+name: Actualizar Users.csv
+
+on:
+  workflow_dispatch:  # Permite ejecución manual desde la API
+  push:
+    branches:
+      - main
+    paths:
+      - 'users.csv'  # Se ejecuta cuando se actualiza el CSV
+
+jobs:
+  update_csv:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🛎️ Clonar el repositorio
+        uses: actions/checkout@v3
+
+      - name: 🔧 Configurar Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: "3.9"
+
+      - name: 📦 Instalar dependencias
+        run: pip install pandas requests
+
+      - name: 🔄 Confirmar actualización del archivo CSV
+        run: echo "Users.csv ha sido actualizado correctamente en GitHub."
