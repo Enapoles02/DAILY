@@ -21,7 +21,10 @@ jobs:
       - name: 📦 Instalar dependencias
         run: pip install pandas requests
 
+      - name: 📝 Listar archivos para depuración
+        run: ls -l
+
       - name: 🔄 Ejecutar el script para generar el CSV
         env:
           TOKEN_DAILY: ${{ secrets.TOKEN_DAILY }}
-        run: generate_csv.py
+        run: python generate_csv.py  # 🔹 CORREGIDO: Se ejecuta con python
