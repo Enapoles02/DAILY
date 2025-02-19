@@ -11,35 +11,15 @@ try:
     firebase_dict = dict(st.secrets["FIREBASE_CREDENTIALS"])
     firebase_dict["private_key"] = firebase_dict["private_key"].replace("\\n", "\n")
 
-    # 🔥 Inicializar Firebase
+    # 🔥 Intentar Inicializar Firebase y Conectar a Firestore
     if not firebase_admin._apps:
         cred = credentials.Certificate(firebase_dict)
         firebase_admin.initialize_app(cred)
 
     # 🔥 Conectar a Firestore
     db = firestore.client()
+    st.success("✅ Firebase se ha inicializado correctamente.")
 
 except Exception as e:
-    raise ValueError(f"❌ ERROR AL INICIALIZAR FIREBASE: {str(e)}")
-
-# Función para registrar un usuario en Firestore
-def registrar_usuario(usuario, password):
-    try:
-        doc_ref = db.collection("usuarios").document(usuario.lower())
-        if doc_ref.get().exists:
-            return False  # El usuario ya existe
-        doc_ref.set({"password": password})
-        return True
-    except Exception as e:
-        raise ValueError(f"❌ ERROR REGISTRANDO USUARIO: {str(e)}")
-
-# Función para verificar un usuario en Firestore
-def verificar_usuario(usuario, password):
-    try:
-        doc_ref = db.collection("usuarios").document(usuario.lower())
-        doc = doc_ref.get()
-        if doc.exists and doc.to_dict().get("password") == password:
-            return True
-        return False
-    except Exception as e:
-        raise ValueError(f"❌ ERROR VERIFICANDO USUARIO: {str(e)}")
+    st.error(f"❌ ERROR AL INICIALIZAR FIREBASE: {str(e)}")
+    raise
