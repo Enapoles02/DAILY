@@ -1,97 +1,76 @@
 import streamlit as st
 import pandas as pd
+import requests
 import os
+import base64
 
-# Archivo CSV donde se guardarán los usuarios
-DB_FILE = "users.csv"
+# Configuración de GitHub
+GITHUB_REPO = "Enapoles02/DAILY"  # Cambia esto si tu repo es diferente
+CSV_FILE = "users.csv"
+GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{CSV_FILE}"
+WORKFLOW_URL = f"https://api.github.com/repos/{GITHUB_REPO}/actions/workflows/update_users.yml/dispatches"
+GITHUB_TOKEN = os.getenv("TOKEN_DAILY")  # Secreto en GitHub
 
-# Verifica si el CSV existe, si no, lo crea con columnas predeterminadas
-if not os.path.exists(DB_FILE):
-    df_init = pd.DataFrame(columns=["Usuario", "Contraseña"])
-    df_init.to_csv(DB_FILE, index=False)
+# Función para obtener el archivo CSV desde GitHub
+def obtener_usuarios():
+    response = requests.get(GITHUB_API_URL, headers={"Authorization": f"token {GITHUB_TOKEN}"})
+    if response.status_code == 200:
+        content = response.json()
+        csv_data = base64.b64decode(content["content"]).decode("utf-8")
+        return pd.read_csv(pd.io.common.StringIO(csv_data))
+    return pd.DataFrame(columns=["Usuario", "Contraseña"])  # Si falla, devuelve un CSV vacío
 
-# Función para verificar usuario
-def verificar_usuario(usuario, password):
-    if os.path.exists(DB_FILE):
-        df = pd.read_csv(DB_FILE)
-        if ((df["Usuario"] == usuario) & (df["Contraseña"] == password)).any():
-            return True
-    return False
-
-# Función para registrar un nuevo usuario
-def registrar_usuario(usuario, password):
-    df = pd.read_csv(DB_FILE)
+# Función para guardar el usuario en GitHub
+def guardar_usuario(usuario, password):
+    df = obtener_usuarios()
+    
     if usuario in df["Usuario"].values:
-        return False  # Usuario ya registrado
+        return False  # No duplicar usuarios
+
     nuevo_usuario = pd.DataFrame([[usuario, password]], columns=["Usuario", "Contraseña"])
     df = pd.concat([df, nuevo_usuario], ignore_index=True)
-    df.to_csv(DB_FILE, index=False)
-    return True
+
+    csv_data = df.to_csv(index=False).encode()
+    content_encoded = base64.b64encode(csv_data).decode("utf-8")
+
+    # Obtener el SHA del archivo (si ya existe)
+    response = requests.get(GITHUB_API_URL, headers={"Authorization": f"token {GITHUB_TOKEN}"})
+    sha = response.json().get("sha", "")
+
+    # Subir el nuevo CSV a GitHub
+    payload = {
+        "message": "Actualización de usuarios desde Streamlit",
+        "content": content_encoded,
+        "branch": "main",
+        "sha": sha
+    }
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    response = requests.put(GITHUB_API_URL, json=payload, headers=headers)
+
+    # 🚀 Disparar el workflow después de guardar el usuario
+    if response.status_code in [200, 201]:
+        requests.post(
+            WORKFLOW_URL,
+            headers={"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"},
+            json={"ref": "main"}
+        )
+
+    return response.status_code in [200, 201]
 
 # ---- INTERFAZ DE STREAMLIT ----
-
 st.title("Daily Huddle App")
 
-# 1️⃣ PANTALLA DE REGISTRO/LOGIN
-st.subheader("Registro / Inicio de Sesión")
+st.subheader("Registro de Usuario")
 
-usuario = st.text_input("Usuario")
-password = st.text_input("Contraseña", type="password")
-boton_login = st.button("Iniciar Sesión")
-
-if boton_login:
-    if verificar_usuario(usuario, password):
-        st.session_state["logged_in"] = True
-        st.session_state["usuario"] = usuario
-        st.success("Inicio de sesión exitoso. Accediendo a la app...")
-    else:
-        st.error("Usuario o contraseña incorrectos. Regístrate si aún no tienes cuenta.")
-
-st.subheader("¿Nuevo aquí?")
-usuario_nuevo = st.text_input("Nuevo Usuario")
-password_nuevo = st.text_input("Nueva Contraseña", type="password")
+usuario_nuevo = st.text_input("Usuario")
+password_nuevo = st.text_input("Contraseña", type="password")
 boton_registro = st.button("Registrar")
 
 if boton_registro:
     if usuario_nuevo and password_nuevo:
-        if registrar_usuario(usuario_nuevo, password_nuevo):
-            st.success("Usuario registrado con éxito. Ahora inicia sesión.")
+        if guardar_usuario(usuario_nuevo, password_nuevo):
+            st.success("Usuario registrado con éxito.")
         else:
             st.error("El usuario ya existe. Intenta con otro nombre.")
     else:
         st.error("Debes ingresar un usuario y contraseña.")
-
-# 2️⃣ VERIFICAR SI EL USUARIO ESTÁ LOGUEADO PARA MOSTRAR LAS PESTAÑAS
-if "logged_in" in st.session_state and st.session_state["logged_in"]:
-    
-    # 3️⃣ NAVEGACIÓN ENTRE PESTAÑAS
-    menu = st.sidebar.radio("Navegación", ["Overview", "Top 3", "Action Board", "Communications", "Calendar"])
-
-    # 4️⃣ CONTENIDO DE CADA PESTAÑA
-    if menu == "Overview":
-        st.subheader("Bienvenido a Daily Huddle")
-        st.write("Aquí puedes gestionar tus prioridades diarias de manera estructurada.")
-        st.write("Si necesitas ayuda, contacta a: **enrique.napoles@dbschenker.com**")
-
-    elif menu == "Top 3":
-        st.subheader("Tus 3 prioridades del día")
-        prioridad1 = st.text_input("Prioridad 1")
-        prioridad2 = st.text_input("Prioridad 2")
-        prioridad3 = st.text_input("Prioridad 3")
-        if st.button("Guardar Prioridades"):
-            st.success("¡Tus prioridades han sido guardadas!")
-
-    elif menu == "Action Board":
-        st.subheader("Acciones y Seguimiento")
-        accion = st.text_area("Registra aquí las acciones a tomar")
-        if st.button("Guardar Acción"):
-            st.success("Acción registrada con éxito.")
-
-    elif menu == "Communications":
-        st.subheader("Comunicaciones y Mensajes")
-        st.write("Aquí se mostrarán las comunicaciones importantes.")
-
-    elif menu == "Calendar":
-        st.subheader("Calendario de Eventos")
-        st.write("Aquí puedes ver los eventos importantes y recordatorios.")
-
