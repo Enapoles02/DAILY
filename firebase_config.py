@@ -1,11 +1,14 @@
 import firebase_admin
 from firebase_admin import credentials, firestore
 import streamlit as st
-import json
 
-# 🔥 Leer credenciales desde `st.secrets`
-firebase_dict = json.loads(json.dumps(st.secrets["FIREBASE_CREDENTIALS"]))
-firebase_dict["private_key"] = firebase_dict["private_key"].replace("\\n", "\n")
+# 🔍 Verificar si las credenciales están en `st.secrets`
+if "FIREBASE_CREDENTIALS" not in st.secrets:
+    raise ValueError("❌ ERROR: `FIREBASE_CREDENTIALS` no está configurado en Streamlit Cloud.")
+
+# 🔥 Leer credenciales directamente desde `st.secrets`
+firebase_dict = st.secrets["FIREBASE_CREDENTIALS"]
+firebase_dict["private_key"] = firebase_dict["private_key"].replace("\\n", "\n")  # Reemplazar saltos de línea
 
 # Inicializar Firebase con las credenciales
 if not firebase_admin._apps:
