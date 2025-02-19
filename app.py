@@ -1,75 +1,97 @@
 import streamlit as st
 import pandas as pd
-import requests
-import io
+import os
 
-# Configuración de GitHub
-GITHUB_REPO = "Enapoles02/DAILY"  # Reemplaza con tu usuario/repositorio
-GITHUB_TOKEN = "TOKEN_DAILY"   # Genera un token en GitHub con permisos de escritura
+# Archivo CSV donde se guardarán los usuarios
 DB_FILE = "users.csv"
-GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{DB_FILE}"
 
-# Función para obtener el contenido del archivo desde GitHub
-def obtener_datos():
-    try:
-        response = requests.get(GITHUB_API_URL)
-        if response.status_code == 200:
-            content = response.json()
-            csv_data = requests.get(content["download_url"]).text
-            return pd.read_csv(io.StringIO(csv_data))
-        else:
-            return pd.DataFrame(columns=["Nombre", "Correo", "Área"])
-    except:
-        return pd.DataFrame(columns=["Nombre", "Correo", "Área"])
+# Verifica si el CSV existe, si no, lo crea con columnas predeterminadas
+if not os.path.exists(DB_FILE):
+    df_init = pd.DataFrame(columns=["Usuario", "Contraseña"])
+    df_init.to_csv(DB_FILE, index=False)
 
-# Función para guardar el usuario en GitHub
-def guardar_usuario(nombre, correo, area, password):
-    df = obtener_datos()
-    nuevo_usuario = pd.DataFrame([[nombre, correo, area]], columns=["Nombre", "Correo", "Área"])
+# Función para verificar usuario
+def verificar_usuario(usuario, password):
+    if os.path.exists(DB_FILE):
+        df = pd.read_csv(DB_FILE)
+        if ((df["Usuario"] == usuario) & (df["Contraseña"] == password)).any():
+            return True
+    return False
+
+# Función para registrar un nuevo usuario
+def registrar_usuario(usuario, password):
+    df = pd.read_csv(DB_FILE)
+    if usuario in df["Usuario"].values:
+        return False  # Usuario ya registrado
+    nuevo_usuario = pd.DataFrame([[usuario, password]], columns=["Usuario", "Contraseña"])
     df = pd.concat([df, nuevo_usuario], ignore_index=True)
+    df.to_csv(DB_FILE, index=False)
+    return True
 
-    # Convertir a CSV
-    csv_data = df.to_csv(index=False)
+# ---- INTERFAZ DE STREAMLIT ----
 
-    # Obtener el SHA del archivo (necesario para actualizar)
-    response = requests.get(GITHUB_API_URL, headers={"Authorization": f"token {GITHUB_TOKEN}"})
-    sha = response.json().get("sha", "")
+st.title("Daily Huddle App")
 
-    # Subir cambios a GitHub
-    payload = {
-        "message": "Nuevo usuario registrado",
-        "content": io.BytesIO(csv_data.encode()).getvalue().decode("latin1"),
-        "branch": "main",
-        "sha": sha
-    }
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    requests.put(GITHUB_API_URL, json=payload, headers=headers)
+# 1️⃣ PANTALLA DE REGISTRO/LOGIN
+st.subheader("Registro / Inicio de Sesión")
 
-# Interfaz de Streamlit
-st.title("Portal de Registro")
+usuario = st.text_input("Usuario")
+password = st.text_input("Contraseña", type="password")
+boton_login = st.button("Iniciar Sesión")
 
-# Formulario de Registro
-with st.form("register_form"):
-    nombre = st.text_input("Nombre")
-    correo = st.text_input("Correo electrónico")
-    area = st.selectbox("Área", ["Finanzas", "TI", "Recursos Humanos", "Ventas", "Otro"])
-    password = st.text_input("Contraseña", type="password")
-    submit_button = st.form_submit_button("Registrar")
-
-if submit_button:
-    if nombre and correo and area and password:
-        guardar_usuario(nombre, correo, area, password)
-        st.success(f"Usuario {nombre} registrado exitosamente")
+if boton_login:
+    if verificar_usuario(usuario, password):
+        st.session_state["logged_in"] = True
+        st.session_state["usuario"] = usuario
+        st.success("Inicio de sesión exitoso. Accediendo a la app...")
     else:
-        st.error("Todos los campos son obligatorios")
+        st.error("Usuario o contraseña incorrectos. Regístrate si aún no tienes cuenta.")
 
-# Sección protegida para ver usuarios registrados
-clave = st.text_input("Ingresa la clave de acceso", type="password")
+st.subheader("¿Nuevo aquí?")
+usuario_nuevo = st.text_input("Nuevo Usuario")
+password_nuevo = st.text_input("Nueva Contraseña", type="password")
+boton_registro = st.button("Registrar")
 
-if clave == "Naec2828":
-    st.success("Acceso permitido")
-    df = obtener_datos()
-    if not df.empty:
-        st.dataframe(df)
+if boton_registro:
+    if usuario_nuevo and password_nuevo:
+        if registrar_usuario(usuario_nuevo, password_nuevo):
+            st.success("Usuario registrado con éxito. Ahora inicia sesión.")
+        else:
+            st.error("El usuario ya existe. Intenta con otro nombre.")
     else:
-        st.error("No hay usuarios registrados.")
+        st.error("Debes ingresar un usuario y contraseña.")
+
+# 2️⃣ VERIFICAR SI EL USUARIO ESTÁ LOGUEADO PARA MOSTRAR LAS PESTAÑAS
+if "logged_in" in st.session_state and st.session_state["logged_in"]:
+    
+    # 3️⃣ NAVEGACIÓN ENTRE PESTAÑAS
+    menu = st.sidebar.radio("Navegación", ["Overview", "Top 3", "Action Board", "Communications", "Calendar"])
+
+    # 4️⃣ CONTENIDO DE CADA PESTAÑA
+    if menu == "Overview":
+        st.subheader("Bienvenido a Daily Huddle")
+        st.write("Aquí puedes gestionar tus prioridades diarias de manera estructurada.")
+        st.write("Si necesitas ayuda, contacta a: **enrique.napoles@dbschenker.com**")
+
+    elif menu == "Top 3":
+        st.subheader("Tus 3 prioridades del día")
+        prioridad1 = st.text_input("Prioridad 1")
+        prioridad2 = st.text_input("Prioridad 2")
+        prioridad3 = st.text_input("Prioridad 3")
+        if st.button("Guardar Prioridades"):
+            st.success("¡Tus prioridades han sido guardadas!")
+
+    elif menu == "Action Board":
+        st.subheader("Acciones y Seguimiento")
+        accion = st.text_area("Registra aquí las acciones a tomar")
+        if st.button("Guardar Acción"):
+            st.success("Acción registrada con éxito.")
+
+    elif menu == "Communications":
+        st.subheader("Comunicaciones y Mensajes")
+        st.write("Aquí se mostrarán las comunicaciones importantes.")
+
+    elif menu == "Calendar":
+        st.subheader("Calendario de Eventos")
+        st.write("Aquí puedes ver los eventos importantes y recordatorios.")
+
