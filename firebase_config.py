@@ -11,6 +11,8 @@ if not firebase_json:
 
 try:
     firebase_dict = json.loads(firebase_json)  # Convertir string JSON a diccionario
+    # 🔥 Reemplazar saltos de línea en la clave privada
+    firebase_dict["private_key"] = firebase_dict["private_key"].replace("\\n", "\n")
 except json.JSONDecodeError:
     raise ValueError("⚠️ ERROR: FIREBASE_CREDENTIALS no contiene un JSON válido. Verifica que lo pegaste correctamente en GitHub Secrets.")
 
