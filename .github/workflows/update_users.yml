@@ -20,8 +20,13 @@ jobs:
         with:
           python-version: "3.9"
 
-      - name: 📦 Instalar dependencias
-        run: pip install pandas requests
+      - name: 📦 Instalar dependencias necesarias
+        run: pip install pandas requests  # Solo instalamos lo necesario
 
-      - name: 🔄 Confirmar actualización del archivo CSV
+      - name: 🔄 Ejecutar el script para actualizar el CSV
+        env:
+          TOKEN_DAILY: ${{ secrets.TOKEN_DAILY }}
+        run: python generate_csv.py
+
+      - name: ✅ Confirmar actualización
         run: echo "Users.csv ha sido actualizado correctamente en GitHub."
