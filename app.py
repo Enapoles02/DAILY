@@ -10,21 +10,27 @@ CSV_FILE = "users.csv"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{CSV_FILE}"
 GITHUB_TOKEN = os.getenv("TOKEN_DAILY")
 
-# Función para obtener el archivo CSV actualizado desde GitHub
+# Función para obtener `users.csv` actualizado desde GitHub
 def obtener_usuarios():
-    response = requests.get(GITHUB_API_URL, headers={"Authorization": f"token {GITHUB_TOKEN}"})
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    response = requests.get(GITHUB_API_URL, headers=headers)
+
     if response.status_code == 200:
         content = response.json()
         csv_data = base64.b64decode(content["content"]).decode("utf-8")
         return pd.read_csv(pd.io.common.StringIO(csv_data))
-    return pd.DataFrame(columns=["Usuario", "Contraseña"])  # Si el archivo no existe, devuelve un CSV vacío
+    
+    return pd.DataFrame(columns=["Usuario", "Contraseña"])  # Si no hay archivo, devuelve un CSV vacío
 
-# Función para guardar un usuario en GitHub
+# Función para registrar un usuario en GitHub
 def guardar_usuario(usuario, password):
     df = obtener_usuarios()
-    
+
+    usuario = usuario.strip().lower()
+    df["Usuario"] = df["Usuario"].astype(str).str.strip().str.lower()
+
     if usuario in df["Usuario"].values:
-        return False  # No duplicar usuarios
+        return False  # Ya existe el usuario
 
     nuevo_usuario = pd.DataFrame([[usuario, password]], columns=["Usuario", "Contraseña"])
     df = pd.concat([df, nuevo_usuario], ignore_index=True)
@@ -32,11 +38,11 @@ def guardar_usuario(usuario, password):
     csv_data = df.to_csv(index=False).encode()
     content_encoded = base64.b64encode(csv_data).decode("utf-8")
 
-    # Obtener el SHA del archivo para actualizarlo en GitHub
+    # Obtener el SHA del archivo (necesario para actualizarlo)
     response = requests.get(GITHUB_API_URL, headers={"Authorization": f"token {GITHUB_TOKEN}"})
     sha = response.json().get("sha", "")
 
-    # Subir el nuevo CSV a GitHub
+    # Subir archivo a GitHub
     payload = {
         "message": "Actualización de usuarios desde Streamlit",
         "content": content_encoded,
@@ -51,6 +57,9 @@ def guardar_usuario(usuario, password):
 # ---- INTERFAZ DE STREAMLIT ----
 st.title("Daily Huddle App")
 
+# 🚀 Descargar `users.csv` actualizado antes de mostrar la interfaz
+st.session_state["usuarios_df"] = obtener_usuarios()
+
 # Menú de opciones
 menu = st.sidebar.radio("Navegación", ["Registro", "Iniciar Sesión"])
 
@@ -58,7 +67,7 @@ menu = st.sidebar.radio("Navegación", ["Registro", "Iniciar Sesión"])
 if menu == "Registro":
     st.subheader("Registro de Usuario")
 
-    usuario_nuevo = st.text_input("Usuario")
+    usuario_nuevo = st.text_input("Usuario").strip()
     password_nuevo = st.text_input("Contraseña", type="password")
     boton_registro = st.button("Registrar")
 
@@ -66,8 +75,9 @@ if menu == "Registro":
         if usuario_nuevo and password_nuevo:
             if guardar_usuario(usuario_nuevo, password_nuevo):
                 st.success("Usuario registrado con éxito. Ahora puedes iniciar sesión.")
+                st.session_state["usuarios_df"] = obtener_usuarios()  # 🚀 Actualiza la lista en tiempo real
             else:
-                st.error("El usuario ya existe. Intenta con otro nombre.")
+                st.error(f"El usuario '{usuario_nuevo}' ya existe en el sistema.")
         else:
             st.error("Debes ingresar un usuario y contraseña.")
 
@@ -75,12 +85,16 @@ if menu == "Registro":
 if menu == "Iniciar Sesión":
     st.subheader("Inicio de Sesión")
 
-    usuario = st.text_input("Usuario")
+    usuario = st.text_input("Usuario").strip().lower()
     password = st.text_input("Contraseña", type="password")
     boton_login = st.button("Iniciar Sesión")
 
     if boton_login:
-        usuarios_df = obtener_usuarios()
+        usuarios_df = st.session_state["usuarios_df"]
+
+        # 🚀 Convertimos todo a minúsculas para evitar problemas de coincidencia
+        usuarios_df["Usuario"] = usuarios_df["Usuario"].astype(str).str.strip().str.lower()
+
         if ((usuarios_df["Usuario"] == usuario) & (usuarios_df["Contraseña"] == password)).any():
             st.session_state["logged_in"] = True
             st.session_state["usuario"] = usuario
