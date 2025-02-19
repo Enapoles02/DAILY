@@ -24,4 +24,4 @@ jobs:
       - name: 🔄 Ejecutar el script para generar el CSV
         env:
           TOKEN_DAILY: ${{ secrets.TOKEN_DAILY }}
-        run: python generate_csv.py
+        run: generate_csv.py
