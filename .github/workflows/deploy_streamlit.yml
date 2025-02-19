@@ -24,7 +24,9 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install -r requirements.txt
+          pip install pyngrok
 
-      - name: Run Streamlit App
+      - name: Run Streamlit App with ngrok
         run: |
           nohup streamlit run app.py --server.enableCORS false --server.enableXsrfProtection false --server.port 8501 --server.address 0.0.0.0 &
+          nohup python -c "from pyngrok import ngrok; public_url = ngrok.connect(8501).public_url; print(f'🔗 Public URL: {public_url}')" &
