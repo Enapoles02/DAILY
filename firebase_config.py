@@ -5,7 +5,14 @@ import json
 
 # Cargar credenciales desde GitHub Secrets
 firebase_json = os.getenv("FIREBASE_CREDENTIALS")
-firebase_dict = json.loads(firebase_json)  # Convertir string JSON a diccionario
+
+if not firebase_json:
+    raise ValueError("⚠️ ERROR: La clave FIREBASE_CREDENTIALS no está configurada en GitHub Secrets.")
+
+try:
+    firebase_dict = json.loads(firebase_json)  # Convertir string JSON a diccionario
+except json.JSONDecodeError:
+    raise ValueError("⚠️ ERROR: FIREBASE_CREDENTIALS no contiene un JSON válido. Verifica que lo pegaste correctamente en GitHub Secrets.")
 
 # Inicializar Firebase con las credenciales
 if not firebase_admin._apps:
